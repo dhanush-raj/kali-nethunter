@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import os
 import requests
 import zipfile
@@ -13,6 +13,30 @@ import hashlib
 dl_headers = {
 	"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.51 Safari/537.36",
 	"Accept-Encoding":"identity"
+}
+
+dl_supersu = {
+	'beta': ['https://download.chainfire.eu/supersu-beta', False],
+	'stable': ['https://download.chainfire.eu/1113/SuperSU/UPDATE-SuperSU-v2.82-20170528234214.zip', '79884eda71ef17c5e9521881fd0ef043f3a683ce3c087daa099aef13b7d0f63f505ab6c987ee4b00fcb623bc0d9ea6b817c4f96edd2c039782c85bb32995ac5e'],
+}
+
+dl_apps = {
+	'Hackerskeyboard':
+		['https://f-droid.org/repo/org.pocketworkstation.pckeyboard_1039003.apk', '8c861c7540e6eeb006070d0f2d80134e75637066591d705b987e164c3fe87521ed694ac844c945eb74449aff8723ff039f793b2e3743aac73865f74bb248edf5'],
+	'Drivedroid':
+		['https://softwarebakery.com/apps/drivedroid/files/drivedroid-free-0.10.50.apk', '455354369d34dd59cdf71e50c02fd1dc969925f803fbc1c498467ac1b3b50b7a3b23dd22a3e60a5dbe61d7106c99106f92ef6a86c56775f01e42dfcd1837c198'],
+	'OpenVPN':
+		['https://f-droid.org/repo/de.blinkt.openvpn_159.apk', 'a47200c972a6e98649f6a8f87e02c5b924b1c7915ef86698f1339a1ec82af3eab82e7ecf442a3b2f5ab5ded91b59b0943315133413b50a2c473d5f9ba8050695'],
+	'USBKeyboard': # Feb 3, 2015
+		['https://github.com/pelya/android-keyboard-gadget/raw/7ea69c684aa1/USB-Keyboard.apk', '18bced7b339a67c48fe31698cb54063bce8f3dd9f7d7f23d9e5c619697e8da5ab08312cf9a2fa0e3f445a584485db23d1e4c27e3ffc1448551bbaf486ccb11e9'],
+	'RFAnalyzer':
+		['https://github.com/demantz/RFAnalyzer/raw/version_1_13/RFAnalyzer.apk', '7793438b6fbe7288a0ca86de900f5f4e607168de8c97229d08d901c2424b0192bf9dc894f66439f59510c10fa26a26319a1b0d8ea276f6af927cebf677138230'],
+	'Shodan':
+		['https://github.com/PaulSec/Shodan.io-mobile-app/raw/v0.0.3-new/io.shodan.app.apk', 'a2ff39d8e7a86d8e0a14368fd278fb03212999b309bc102d39f76ff69ca2a373d3d62a95cea6dbee761ae81ff3daaf83846e49e8ccbf0760276d825493d08652'],
+	'RouterKeygen':
+		['https://github.com/routerkeygen/routerkeygenAndroid/releases/download/v4.0.2/routerkeygen-4-0-2.apk', '0135bbeb371f616c3577e6932e67b6c22c5aff335c7d7570bf5d26f106eadb0cbf4eea12503726cb806d18794e1adc6f3cc934ea41ca5ef62a8c77a4702947da'],
+	'cSploit':
+		['https://github.com/cSploit/android/releases/download/v1.6.6-rc.2/cSploit-release.apk', 'b841c4376836bcc9d23fbc18b40eed70e08018e8eebc6d2d0abad59da63e4b325ffe4d8a4bd36107af63ed20a59c6648d6c4bd1264044267c86693744b15fa75'],
 }
 
 def copytree(src, dst):
@@ -108,6 +132,8 @@ def download(url, file_name, verify_sha):
 		abort('There was a problem downloading the file "' + file_name  + '"')
 
 def supersu(forcedown, beta):
+	global dl_supersu
+
 	def getdlpage(url):
 		try:
 			u = requests.head(url, headers=dl_headers)
@@ -128,44 +154,27 @@ def supersu(forcedown, beta):
 
 	if not os.path.isfile(suzip):
 		if beta:
-			surl = getdlpage('https://download.chainfire.eu/supersu-beta')
+			surl = getdlpage(dl_supersu['beta'][0])
 		else:
-			surl = getdlpage('https://download.chainfire.eu/1021/SuperSU/SR3-SuperSU-v2.79-SR3-20170114223742.zip')
+			surl = getdlpage(dl_supersu['stable'][0])
 
 		if surl:
 			if beta:
-				download(surl + '?retrieve_file=1', suzip, False)
+				download(surl + '?retrieve_file=1', suzip, dl_supersu['beta'][1])
 			else:
-				download(surl + '?retrieve_file=1', suzip, '8d6b74477e66c548a0492dd6aa75b14e3eb682e26d3b14992bb163fc5c748b9348e8489aaa8da40821bd5849d1de186bdb563b8f9d43cb1fd5fed7e30c09d78b')
+				download(surl + '?retrieve_file=1', suzip, dl_supersu['stable'][1])
 		else:
 			abort('Could not retrieve download URL for SuperSU')
 
 def allapps(forcedown):
-	apps = {
-		'Hackerskeyboard':
-			['https://f-droid.org/repo/org.pocketworkstation.pckeyboard_1039003.apk', '8c861c7540e6eeb006070d0f2d80134e75637066591d705b987e164c3fe87521ed694ac844c945eb74449aff8723ff039f793b2e3743aac73865f74bb248edf5'],
-		'Drivedroid':
-			['https://softwarebakery.com/apps/drivedroid/files/drivedroid-free-0.10.39.apk', 'f9db206642e783c478b9ba7a0fbee8a32b78cc6f919eb7a4fdf5e20dcc473e138917d043d3d17b15bd4e6b1fd202f422524085305b3658bd95903a346e8d1abc'],
-		'OpenVPN':
-			['https://f-droid.org/repo/de.blinkt.openvpn_145.apk', 'd7aba2038ce561c03e7763a71467d1423d0aea2747461651707e621312ae02538787b14eef669bf0100b2a7cb34361fbb2172f221db435126b13a5913dfc3907'],
-		'USBKeyboard': # Feb 3, 2015
-			['https://github.com/pelya/android-keyboard-gadget/raw/7ea69c684aa1/USB-Keyboard.apk', '18bced7b339a67c48fe31698cb54063bce8f3dd9f7d7f23d9e5c619697e8da5ab08312cf9a2fa0e3f445a584485db23d1e4c27e3ffc1448551bbaf486ccb11e9'],
-		'RFAnalyzer':
-			['https://github.com/demantz/RFAnalyzer/raw/version_1_13/RFAnalyzer.apk', '7793438b6fbe7288a0ca86de900f5f4e607168de8c97229d08d901c2424b0192bf9dc894f66439f59510c10fa26a26319a1b0d8ea276f6af927cebf677138230'],
-		'Shodan':
-			['https://github.com/PaulSec/Shodan.io-mobile-app/raw/v0.0.3-new/io.shodan.app.apk', 'a2ff39d8e7a86d8e0a14368fd278fb03212999b309bc102d39f76ff69ca2a373d3d62a95cea6dbee761ae81ff3daaf83846e49e8ccbf0760276d825493d08652'],
-		'RouterKeygen':
-			['https://github.com/routerkeygen/routerkeygenAndroid/releases/download/v3.15.0/routerkeygen-3-15-0.apk', '95fba11539597eced9f3347f627bf3b24c9abc3c7e039ae1552a9c42c8c70ce362720dc401b85b9faac080d64e67bf594625f80472a492baf676dbe93822fc9e'],
-		'cSploit':
-			['https://github.com/cSploit/android/releases/download/v1.6.6-rc.2/cSploit-release.apk', 'b841c4376836bcc9d23fbc18b40eed70e08018e8eebc6d2d0abad59da63e4b325ffe4d8a4bd36107af63ed20a59c6648d6c4bd1264044267c86693744b15fa75'],
-	}
+	global dl_apps
 
 	app_path = os.path.join('update', 'data', 'app')
 
 	if forcedown:
 		print('Force redownloading all apps')
 
-	for key, value in apps.iteritems():
+	for key, value in dl_apps.iteritems():
 		apk_name = key + '.apk'
 		apk_path = os.path.join(app_path, apk_name)
 		apk_url = value[0]
@@ -188,10 +197,11 @@ def rootfs(forcedown, fs_size, nightly):
 	global Arch
 
 	# temporary hack until arm64 support is completed
-	if Arch == 'arm64':
-		fs_arch = 'armhf'
-	else:
-		fs_arch = Arch
+	##if Arch == 'arm64':
+	##	fs_arch = 'armhf'
+	##else:
+       	##      fs_arch = Arch
+       	fs_arch = Arch
 
 	fs_file = 'kalifs-' + fs_arch + '-' + fs_size + '.tar.xz'
 	fs_path = os.path.join('rootfs', fs_file)
@@ -220,10 +230,12 @@ def addrootfs(fs_size, dst):
 	global Arch
 
 	# temporary hack until arm64 support is completed
-	if Arch == 'arm64':
-		fs_arch = 'armhf'
-	else:
-		fs_arch = Arch
+        ## Update 2019-01-25: Disable workaround to use proper arm64 rootfs as it should be fully working now, Re4son
+	##if Arch == 'arm64':
+        ##		fs_arch = 'armhf'
+	##else:
+	##	fs_arch = Arch
+	fs_arch = Arch
 
 	fs_file = 'kalifs-' + fs_arch + '-' + fs_size + '.tar.xz'
 	fs_path = os.path.join('rootfs', fs_file)
@@ -422,7 +434,7 @@ def done():
 def abort(err):
 	print('Error: ' + err)
 	cleanup(True)
-	exit(0)
+	exit(1)
 
 def setuparch():
 	global Arch
@@ -472,13 +484,15 @@ def main():
 	parser.add_argument('--lollipop', '-l', action='store_true', help='Android 5')
 	parser.add_argument('--marshmallow', '-m', action='store_true', help='Android 6')
 	parser.add_argument('--nougat', '-n', action='store_true', help='Android 7')
+	parser.add_argument('--oreo', '-o', action='store_true', help='Android 8')
+	parser.add_argument('--pie', '-p', action='store_true', help='Android 9')
 	parser.add_argument('--forcedown', '-f', action='store_true', help='Force redownloading')
 	parser.add_argument('--uninstaller', '-u', action='store_true', help='Create an uninstaller')
 	parser.add_argument('--kernel', '-k', action='store_true', help='Build kernel installer only')
 	parser.add_argument('--nokernel', '-nk', action='store_true', help='Build without the kernel installer')
-	parser.add_argument('--nosu', '-ns', action='store_true', help='Build without SuperSU installer')
 	parser.add_argument('--nobrand', '-nb', action='store_true', help='Build without wallpaper or boot animation')
 	parser.add_argument('--nofreespace', '-nf', action='store_true', help='Build without free space check')
+	parser.add_argument('--supersu', '-su', action='store_true', help='Build with SuperSU installer included')
 	parser.add_argument('--nightly', '-ni', action='store_true', help='Use nightly mirror for Kali rootfs download (experimental)')
 	parser.add_argument('--generic', '-g', action='store', metavar='ARCH', help='Build a generic installer (modify ramdisk only)')
 	parser.add_argument('--rootfs', '-fs', action='store', metavar='SIZE', help='Build with Kali chroot rootfs (full or minimal)')
@@ -501,7 +515,7 @@ def main():
 		Device = 'generic'
 		setuparch()
 	elif args.forcedown:
-		if not args.nosu:
+		if args.supersu:
 			supersu(True, supersu_beta)
 		allapps(True)
 		done()
@@ -526,10 +540,16 @@ def main():
 		if args.nougat:
 			OS = 'nougat'
 			i += 1
+		if args.oreo:
+			OS = 'oreo'
+			i += 1
+		if args.pie:
+			OS = 'pie'
+			i += 1
 		if i == 0:
-			abort('Missing Android version. Available options: --kitkat, --lollipop, --marshmallow, --nougat')
+			abort('Missing Android version. Available options: --kitkat, --lollipop, --marshmallow, --nougat, --oreo, --pie')
 		elif i > 1:
-			abort('Select only one Android version: --kitkat, --lollipop, --marshmallow, --nougat')
+			abort('Select only one Android version: --kitkat, --lollipop, --marshmallow, --nougat, --oreo, --pie')
 
 		if args.rootfs and not (args.rootfs == 'full' or args.rootfs == 'minimal'):
 			abort('Invalid Kali rootfs size. Available options: --rootfs full, --rootfs minimal')
@@ -552,8 +572,8 @@ def main():
 	# We don't need the apps or SuperSU if we are only building the kernel installer
 	if not args.kernel:
 		allapps(args.forcedown)
-		# Download SuperSU unless we don't want it
-		if not args.nosu:
+		# Download SuperSU if we want it
+		if args.supersu:
 			supersu(args.forcedown, supersu_beta)
 
 	# Download Kali rootfs if we are building a zip with the chroot environment included
@@ -568,6 +588,8 @@ def main():
 		file_tag += '-' + Arch
 	if args.nobrand and not args.kernel:
 		file_tag += '-nobrand'
+	if args.supersu:
+		file_tag += '-rooted'
 	if args.rootfs:
 		file_tag += '-kalifs-' + args.rootfs
 	if args.release:
@@ -597,8 +619,8 @@ def main():
 			print('Created kernel installer: ' + file_name)
 			done()
 
-	# Don't include SuperSU if --nosu is specified
-	if args.nosu:
+	# Don't include SuperSU unless --supersu is specified
+	if not args.supersu:
 		IgnoredFiles.append('supersu.zip')
 
 	# Set up the update zip

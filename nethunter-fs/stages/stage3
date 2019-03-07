@@ -7,6 +7,7 @@ export DEBIAN_FRONTEND=noninteractive
 mount -t proc proc "$rootfs/proc"
 mount -o bind /dev "$rootfs/dev"
 mount -o bind /dev/pts "$rootfs/dev/pts"
+mount -t sysfs sys "$rootfs/sys"
 
 cat << EOF > "$rootfs/debconf.set"
 console-common console-data/keymap/policy select Select keymap from full list
@@ -30,11 +31,12 @@ debconf-set-selections /debconf.set
 rm -f /debconf.set
 apt-get -y install locales-all git-core binutils ca-certificates initramfs-tools locales console-common less nano git
 echo "root:toor" | chpasswd
-sed -i -e 's/KERNEL\!=\"eth\*|/KERNEL\!=\"/' /lib/udev/rules.d/75-persistent-net-generator.rules
-rm -f /etc/udev/rules.d/70-persistent-net.rules
 
+# This looks weird, but we do it twice because every so often, there's a failure to download from the mirror
+# So to workaround it, we attempt to install them twice.
 echo "I: Installing packages with apt-get: $packages"
-apt-get --yes --force-yes install $packages
+apt-get --yes install $packages || apt-get --yes --fix-broken install
+apt-get --yes install $packages || apt-get --yes --fix-broken install
 
 rm -f /usr/sbin/policy-rc.d
 rm -f /usr/sbin/invoke-rc.d
@@ -42,30 +44,71 @@ dpkg-divert --remove --rename /usr/sbin/invoke-rc.d
 EOF
 # End of third-stage script
 
+# Let's do a little bit of magic from outside the chroot
 if [ "$build_size" = full ]; then
 	# We should run git clone outside chroot because it has issues with machine-code translation
 	git clone https://github.com/Proxmark/proxmark3.git "$rootfs/opt/proxmark3"
-	wget "http://repo.kali.org/kali/pool/main/g/gcc-arm-none-eabi/gcc-arm-none-eabi_4.9.3+svn231177-1_${build_arch}.deb" -O "$rootfs/opt/proxmark3/gcc-arm-none-eabi.deb"
 	git clone https://github.com/adaptivethreat/Empire.git "$rootfs/opt/Empire"
+
+	# powershell for arm64 is not yet available in Microsofts repos so let's install it manually
+	if [ $build_arch == "arm64" ]; then
+		mkdir -p $rootfs/opt/microsoft/powershell
+		wget -P $rootfs/opt/microsoft/powershell https://github.com/PowerShell/PowerShell/releases/download/v6.2.0-preview.4/powershell-6.2.0-preview.4-linux-arm64.tar.gz
+                tar -xzf $rootfs/opt/microsoft/powershell/powershell-6.2.0-preview.4-linux-arm64.tar.gz -C $rootfs/opt/microsoft/powershell
+		rm $rootfs/opt/microsoft/powershell/powershell-6.2.0-preview.4-linux-arm64.tar.gz
+	fi
+	if [ $build_arch == "armhf" ]; then
+		mkdir -p $rootfs/opt/microsoft/powershell
+		wget -P $rootfs/opt/microsoft/powershell https://github.com/PowerShell/PowerShell/releases/download/v6.2.0-preview.4/powershell-6.2.0-preview.4-linux-arm32.tar.gz
+                tar -xzf $rootfs/opt/microsoft/powershell/powershell-6.2.0-preview.4-linux-arm32.tar.gz -C $rootfs/opt/microsoft/powershell
+		rm $rootfs/opt/microsoft/powershell/powershell-6.2.0-preview.4-linux-arm32.tar.gz
+	fi
+	# Microsoft no longer supports deletion of the file DELETE_ME_TO_DISABLE_CONSOLEHOST_TELEMETRY to disable telemetry
+	# We have to set this environment variable instead
+	cat << EOF > "$rootfs/etc/profile.d/powershell.sh"
+# Microsoft no longer supports deletion of the file DELETE_ME_TO_DISABLE_CONSOLEHOST_TELEMETRY to disable telemetry
+# We have to set this environment variable instead
+
+export POWERSHELL_TELEMETRY_OPTOUT=1
+EOF
+
+        cat << EOF >> "$rootfs/etc/bash.bashrc"
+# Microsoft no longer supports deletion of the file DELETE_ME_TO_DISABLE_CONSOLEHOST_TELEMETRY to disable telemetry
+# We have to set this environment variable instead
+
+export POWERSHELL_TELEMETRY_OPTOUT=1
+EOF
+
+        # The installation of Empire will still throw a few errors in relation to not being able to install powershell and that it cannot disable telemetry but that is not
+	# to worry about anymore as we have taken care of it ourselves now
+
+# End of doing a little magic from outside the chroot
 
 	cat << EOF >> "$rootfs/third-stage"
 
 # Enable PHP in Apache
-a2enmod php7.0
+a2enmod php7.3
 
 # Enable /var/www/html as default, disable mana unless we need it
 a2dissite 000-mana-toolkit.conf
 a2ensite 000-default.conf
 
-cd /opt/proxmark3
-# Proxmark3 depends on gcc-arm-none-eabi, so we install it before building
-dpkg -i gcc-arm-none-eabi.deb
-rm -f gcc-arm-none-eabi.deb
-make
+if cd /opt/proxmark3; then
+        ## Install some dependencies first
+        apt install -y libpcsclite-dev pcscd pkg-config
+	make
+fi
 
-cd /opt/Empire/setup
-chmod +x install.sh
-printf "\n" | ./install.sh
+if cd /opt/Empire/setup; then
+        # Lets patch install.sh to build xar for our target architecture
+        if [ $build_arch == "arm64" ]; then
+            sed "install.sh" -i -e "s/(cd xar-1.5.2 \&\& \.\/configure)/(cd xar-1.5.2 \&\& \.\/configure --build=armv8l-unkown-linux-gnu)/"
+        elif [ $build_arch == "armhf" ]; then
+            sed "install.sh" -i -e "s/(cd xar-1.5.2 \&\& \.\/configure)/(cd xar-1.5.2 \&\& \.\/configure --build=armv7l-unkown-linux-gnu)/"
+        fi
+	chmod +x install.sh
+	printf "\n" | ./install.sh
+fi
 EOF
 	# End of third-stage script append
 fi
@@ -110,8 +153,8 @@ cp dictionary/wordlist.txt "$rootfs/opt/dic/wordlist.txt"
 cp dictionary/pinlist.txt "$rootfs/opt/dic/pinlist.txt"
 
 # Sets the default for hostapd.conf to the mana karma version
-sed -i 's#^DAEMON_CONF=.*#DAEMON_CONF=/etc/mana-toolkit/hostapd-karma.conf#' "$rootfs/etc/init.d/hostapd"
-sed -i 's/wlan0/wlan1/g' "$rootfs/etc/mana-toolkit/hostapd-karma.conf"
+sed -i 's#^DAEMON_CONF=.*#DAEMON_CONF=/sdcard/nh_files/configs/hostapd-karma.conf#' "$rootfs/etc/init.d/hostapd"
+sed -i 's/wlan0/wlan1/g' "$rootfs/etc/mana-toolkit/hostapd-mana-"*
 
 # DNSMASQ Configuration options for optional access point
 cat << EOF > "$rootfs/etc/dnsmasq.conf"
@@ -135,7 +178,7 @@ EOF
 
 # Apt now adds a new user to "nobody" but the _apt user can't access updates
 # because of inet.  Modify passwd to put them in inet group for android
-sed -i 's/_apt:x:104:65534/_apt:x:104:3004/g' "$rootfs/etc/passwd"
+sed -i -e 's/^\(_apt:\)\([^:]\)\(:[0-9]*\)\(:[0-9]*\):/\1\2\3:3004:/' "$rootfs/etc/passwd"
 
 # Fix armitage to run on NH
 # https://github.com/offensive-security/kali-nethunter/issues/600
